@@ -14,6 +14,7 @@ pub async fn click(
     button: &str,
     click_count: i32,
     iframe_sessions: &HashMap<String, String>,
+    stealth_input: bool,
 ) -> Result<(), String> {
     let (x, y, effective_session_id) = resolve_element_center(
         client,
@@ -23,7 +24,7 @@ pub async fn click(
         iframe_sessions,
     )
     .await?;
-    dispatch_click(client, &effective_session_id, x, y, button, click_count).await
+    dispatch_click(client, &effective_session_id, x, y, button, click_count, stealth_input).await
 }
 
 pub async fn dblclick(
@@ -32,6 +33,7 @@ pub async fn dblclick(
     ref_map: &RefMap,
     selector_or_ref: &str,
     iframe_sessions: &HashMap<String, String>,
+    stealth_input: bool,
 ) -> Result<(), String> {
     click(
         client,
@@ -41,6 +43,7 @@ pub async fn dblclick(
         "left",
         2,
         iframe_sessions,
+        stealth_input,
     )
     .await
 }
@@ -87,6 +90,7 @@ pub async fn fill(
     selector_or_ref: &str,
     value: &str,
     iframe_sessions: &HashMap<String, String>,
+    stealth_input: bool,
 ) -> Result<(), String> {
     let (object_id, effective_session_id) = resolve_element_object_id(
         client,
@@ -132,16 +136,57 @@ pub async fn fill(
         )
         .await?;
 
-    // Insert text (keyboard input dispatched at page level, use parent session_id)
-    client
-        .send_command_typed::<_, Value>(
-            "Input.insertText",
-            &InsertTextParams {
-                text: value.to_string(),
-            },
-            Some(session_id),
-        )
-        .await?;
+    if stealth_input {
+        // Human-like: dispatch each character individually with random 20-80ms delay
+        for ch in value.chars() {
+            let text = ch.to_string();
+            client
+                .send_command_typed::<_, Value>(
+                    "Input.dispatchKeyEvent",
+                    &DispatchKeyEventParams {
+                        event_type: "keyDown".to_string(),
+                        key: Some(text.clone()),
+                        code: None,
+                        text: Some(text.clone()),
+                        unmodified_text: Some(text.clone()),
+                        windows_virtual_key_code: None,
+                        native_virtual_key_code: None,
+                        modifiers: None,
+                    },
+                    Some(session_id),
+                )
+                .await?;
+            client
+                .send_command_typed::<_, Value>(
+                    "Input.dispatchKeyEvent",
+                    &DispatchKeyEventParams {
+                        event_type: "keyUp".to_string(),
+                        key: Some(text.clone()),
+                        code: None,
+                        text: None,
+                        unmodified_text: None,
+                        windows_virtual_key_code: None,
+                        native_virtual_key_code: None,
+                        modifiers: None,
+                    },
+                    Some(session_id),
+                )
+                .await?;
+            let delay_ms = 20 + (rand_range_u64(60));
+            tokio::time::sleep(tokio::time::Duration::from_millis(delay_ms)).await;
+        }
+    } else {
+        // Insert text (keyboard input dispatched at page level, use parent session_id)
+        client
+            .send_command_typed::<_, Value>(
+                "Input.insertText",
+                &InsertTextParams {
+                    text: value.to_string(),
+                },
+                Some(session_id),
+            )
+            .await?;
+    }
 
     Ok(())
 }
@@ -156,6 +201,7 @@ pub async fn type_text(
     clear: bool,
     delay_ms: Option<u64>,
     iframe_sessions: &HashMap<String, String>,
+    stealth_input: bool,
 ) -> Result<(), String> {
     let (object_id, effective_session_id) = resolve_element_object_id(
         client,
@@ -202,7 +248,7 @@ pub async fn type_text(
             .await?;
     }
 
-    type_text_into_active_context(client, session_id, text, delay_ms).await
+    type_text_into_active_context(client, session_id, text, delay_ms, stealth_input).await
 }
 
 pub async fn type_text_into_active_context(
@@ -210,8 +256,13 @@ pub async fn type_text_into_active_context(
     session_id: &str,
     text: &str,
     delay_ms: Option<u64>,
+    stealth_input: bool,
 ) -> Result<(), String> {
-    let delay = delay_ms.unwrap_or(0);
+    let delay = if stealth_input && delay_ms.is_none() {
+        30 + rand_range_u64(40)
+    } else {
+        delay_ms.unwrap_or(0)
+    };
 
     for ch in text.chars() {
         if matches!(ch, '\n' | '\r' | '\t') {
@@ -442,6 +493,7 @@ pub async fn check(
     ref_map: &RefMap,
     selector_or_ref: &str,
     iframe_sessions: &HashMap<String, String>,
+    stealth_input: bool,
 ) -> Result<(), String> {
     let is_checked = super::element::is_element_checked(
         client,
@@ -460,6 +512,7 @@ pub async fn check(
             "left",
             1,
             iframe_sessions,
+            stealth_input,
         )
         .await?;
 
@@ -494,6 +547,7 @@ pub async fn uncheck(
     ref_map: &RefMap,
     selector_or_ref: &str,
     iframe_sessions: &HashMap<String, String>,
+    stealth_input: bool,
 ) -> Result<(), String> {
     let is_checked = super::element::is_element_checked(
         client,
@@ -512,6 +566,7 @@ pub async fn uncheck(
             "left",
             1,
             iframe_sessions,
+            stealth_input,
         )
         .await?;
 
@@ -891,7 +946,40 @@ async fn dispatch_click(
     y: f64,
     button: &str,
     click_count: i32,
+    stealth_input: bool,
 ) -> Result<(), String> {
+    if stealth_input {
+        // Human-like: 5-8 intermediate mouseMoved events with 10-20ms delays
+        let steps = 5 + (rand_range_u64(4) as usize);
+        // Start from a position slightly offset from target
+        let start_x = x - 50.0 - rand_range_u64(50) as f64;
+        let start_y = y - 20.0 - rand_range_u64(30) as f64;
+        for i in 1..=steps {
+            let t = i as f64 / steps as f64;
+            let ix = start_x + (x - start_x) * t;
+            let iy = start_y + (y - start_y) * t;
+            client
+                .send_command_typed::<_, Value>(
+                    "Input.dispatchMouseEvent",
+                    &DispatchMouseEventParams {
+                        event_type: "mouseMoved".to_string(),
+                        x: ix,
+                        y: iy,
+                        button: None,
+                        buttons: None,
+                        click_count: None,
+                        delta_x: None,
+                        delta_y: None,
+                        modifiers: None,
+                    },
+                    Some(session_id),
+                )
+                .await?;
+            let delay_ms = 10 + rand_range_u64(11);
+            tokio::time::sleep(tokio::time::Duration::from_millis(delay_ms)).await;
+        }
+    }
+
     // Move
     client
         .send_command_typed::<_, Value>(
@@ -1063,6 +1151,22 @@ fn named_key_info(key: &str) -> (String, String, i32) {
             }
         }
     }
+}
+
+/// Simple pseudo-random u64 in range [0, range) using time-based seed.
+/// Used for human-like timing variation without pulling in a rand crate.
+fn rand_range_u64(range: u64) -> u64 {
+    if range == 0 {
+        return 0;
+    }
+    let nanos = std::time::SystemTime::now()
+        .duration_since(std::time::UNIX_EPOCH)
+        .unwrap_or_default()
+        .subsec_nanos() as u64;
+    // xorshift to add some variation
+    let mut x = nanos ^ (nanos << 13) ^ (nanos >> 7);
+    x ^= x << 17;
+    x % range
 }
 
 #[cfg(test)]

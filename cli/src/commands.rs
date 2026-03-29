@@ -2323,6 +2323,8 @@ mod tests {
             screenshot_format: None,
             idle_timeout: None,
             stealth: true,
+            proxy_list: None,
+            stealth_input: false,
         }
     }
 

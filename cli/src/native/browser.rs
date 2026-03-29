@@ -294,14 +294,43 @@ impl BrowserManager {
         }
 
         if let Some(ref ua) = user_agent {
+            let params = if stealth {
+                let metadata = crate::native::stealth::build_stealth_ua_metadata(ua);
+                json!({ "userAgent": ua, "userAgentMetadata": metadata })
+            } else {
+                json!({ "userAgent": ua })
+            };
             let _ = manager
                 .client
                 .send_command(
                     "Emulation.setUserAgentOverride",
-                    Some(json!({ "userAgent": ua })),
+                    Some(params),
                     Some(&session_id),
                 )
                 .await;
+        } else if stealth {
+            // Auto-generate a realistic UA from the actual Chrome version when stealth is
+            // enabled but no explicit user_agent was provided.
+            if let Ok(version_info) = manager
+                .client
+                .send_command_no_params("Browser.getVersion", None)
+                .await
+            {
+                // version_info["userAgent"] contains the real browser UA string
+                if let Some(real_ua) = version_info.get("userAgent").and_then(|v| v.as_str()) {
+                    // Strip the "HeadlessChrome" marker and replace with "Chrome"
+                    let stealth_ua = real_ua.replace("HeadlessChrome", "Chrome");
+                    let metadata = crate::native::stealth::build_stealth_ua_metadata(&stealth_ua);
+                    let _ = manager
+                        .client
+                        .send_command(
+                            "Emulation.setUserAgentOverride",
+                            Some(json!({ "userAgent": stealth_ua, "userAgentMetadata": metadata })),
+                            Some(&session_id),
+                        )
+                        .await;
+                }
+            }
         }
 
         if let Some(ref scheme) = color_scheme {
@@ -918,10 +947,16 @@ impl BrowserManager {
 
     pub async fn set_user_agent(&self, user_agent: &str) -> Result<(), String> {
         let session_id = self.active_session_id()?;
+        let params = if self.stealth {
+            let metadata = crate::native::stealth::build_stealth_ua_metadata(user_agent);
+            json!({ "userAgent": user_agent, "userAgentMetadata": metadata })
+        } else {
+            json!({ "userAgent": user_agent })
+        };
         self.client
             .send_command(
                 "Emulation.setUserAgentOverride",
-                Some(json!({ "userAgent": user_agent })),
+                Some(params),
                 Some(session_id),
             )
             .await?;

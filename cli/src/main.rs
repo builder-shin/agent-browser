@@ -1040,7 +1040,8 @@ fn main() {
             "id": gen_id(),
             "action": "launch",
             "headless": !flags.headed,
-            "stealth": flags.stealth
+            "stealth": flags.stealth,
+            "stealth_input": flags.stealth_input
         });
 
         let cmd_obj = launch_cmd

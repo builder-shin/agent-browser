@@ -90,6 +90,7 @@ pub struct LaunchOptions {
     pub color_scheme: Option<String>,
     pub download_path: Option<String>,
     pub stealth: bool,
+    pub stealth_input: bool,
 }
 
 impl Default for LaunchOptions {
@@ -111,6 +112,7 @@ impl Default for LaunchOptions {
             color_scheme: None,
             download_path: None,
             stealth: true,
+            stealth_input: false,
         }
     }
 }

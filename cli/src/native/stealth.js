@@ -140,6 +140,24 @@
       sendMessage: function() {}
     };
   }
+  if (typeof window.chrome.runtime.id === 'undefined') {
+    window.chrome.runtime.id = '';
+  }
+  if (!window.chrome.runtime.getManifest) {
+    window.chrome.runtime.getManifest = function getManifest() { return {}; };
+  }
+  if (!window.chrome.runtime.getURL) {
+    window.chrome.runtime.getURL = function getURL(path) { return 'chrome-extension://undefined/' + path; };
+  }
+  if (!window.chrome.runtime.getPlatformInfo) {
+    window.chrome.runtime.getPlatformInfo = function getPlatformInfo(callback) {
+      if (callback) callback({ os: 'mac', arch: 'arm', nacl_arch: 'arm' });
+      return Promise.resolve({ os: 'mac', arch: 'arm', nacl_arch: 'arm' });
+    };
+  }
+  if (typeof window.chrome.runtime.lastError === 'undefined') {
+    window.chrome.runtime.lastError = null;
+  }
   if (!window.chrome.csi) {
     window.chrome.csi = function() {
       return {
@@ -202,6 +220,90 @@
       get: () => 4,
       configurable: true
     });
+  }
+
+  // === EVASION: window geometry ===
+  // Headless Chrome has outerHeight=0, outerWidth=0, screenX=0, screenY=0
+  Object.defineProperty(window, 'outerHeight', {
+      get: () => window.innerHeight + 85, // Chrome toolbar height
+      configurable: true
+  });
+  Object.defineProperty(window, 'outerWidth', {
+      get: () => window.innerWidth,
+      configurable: true
+  });
+  Object.defineProperty(window, 'screenX', {
+      get: () => 13,
+      configurable: true
+  });
+  Object.defineProperty(window, 'screenY', {
+      get: () => 25,
+      configurable: true
+  });
+  // Screen dimensions
+  if (screen.width === 0 || screen.height === 0) {
+      Object.defineProperty(screen, 'width', { get: () => 1920, configurable: true });
+      Object.defineProperty(screen, 'height', { get: () => 1080, configurable: true });
+  }
+  Object.defineProperty(screen, 'availWidth', {
+      get: () => screen.width,
+      configurable: true
+  });
+  Object.defineProperty(screen, 'availHeight', {
+      get: () => screen.height - 40, // taskbar
+      configurable: true
+  });
+
+  // === EVASION: Function.toString native code ===
+  // Make injected functions appear as native code
+  const nativeFunctionToString = Function.prototype.toString;
+  const stealthFunctions = new WeakSet();
+
+  function markAsNative(fn, name) {
+      stealthFunctions.add(fn);
+      Object.defineProperty(fn, 'name', { value: name, configurable: true });
+  }
+
+  // Mark all our stub functions
+  if (window.chrome) {
+      if (window.chrome.csi) markAsNative(window.chrome.csi, 'csi');
+      if (window.chrome.loadTimes) markAsNative(window.chrome.loadTimes, 'loadTimes');
+      if (window.chrome.runtime) {
+          if (window.chrome.runtime.connect) markAsNative(window.chrome.runtime.connect, 'connect');
+          if (window.chrome.runtime.sendMessage) markAsNative(window.chrome.runtime.sendMessage, 'sendMessage');
+          if (window.chrome.runtime.getManifest) markAsNative(window.chrome.runtime.getManifest, 'getManifest');
+          if (window.chrome.runtime.getURL) markAsNative(window.chrome.runtime.getURL, 'getURL');
+          if (window.chrome.runtime.getPlatformInfo) markAsNative(window.chrome.runtime.getPlatformInfo, 'getPlatformInfo');
+      }
+  }
+
+  Function.prototype.toString = function() {
+      if (stealthFunctions.has(this)) {
+          return 'function ' + (this.name || '') + '() { [native code] }';
+      }
+      return nativeFunctionToString.call(this);
+  };
+  stealthFunctions.add(Function.prototype.toString);
+
+  // === EVASION: navigator.userAgentData.getHighEntropyValues ===
+  if (navigator.userAgentData && navigator.userAgentData.getHighEntropyValues) {
+      const originalGetHEV = navigator.userAgentData.getHighEntropyValues.bind(navigator.userAgentData);
+      navigator.userAgentData.getHighEntropyValues = function(hints) {
+          return originalGetHEV(hints).then(function(values) {
+              // Ensure brands don't contain HeadlessChrome
+              if (values.brands) {
+                  values.brands = values.brands.map(function(b) {
+                      return { brand: b.brand.replace(/HeadlessChrome/g, 'Chrome'), version: b.version };
+                  });
+              }
+              if (values.fullVersionList) {
+                  values.fullVersionList = values.fullVersionList.map(function(b) {
+                      return { brand: b.brand.replace(/HeadlessChrome/g, 'Chrome'), version: b.version };
+                  });
+              }
+              return values;
+          });
+      };
   }
 
 })();

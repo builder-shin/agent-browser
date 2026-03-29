@@ -4,7 +4,7 @@ use std::env;
 use std::fs;
 use std::io::Write;
 use std::path::PathBuf;
-use std::sync::atomic::AtomicU64;
+use std::sync::atomic::{AtomicU64, AtomicUsize, Ordering};
 use std::sync::Arc;
 use time::{format_description::well_known::Rfc3339, OffsetDateTime};
 use tokio::sync::{broadcast, oneshot, RwLock};
@@ -214,6 +214,14 @@ pub struct DaemonState {
     pub stream_server: Option<Arc<StreamServer>>,
     /// Browser engine name (e.g. "chrome", "lightpanda") for observability.
     pub engine: String,
+    /// Proxy rotation list parsed from VEIL_PROXY_LIST or --proxy-list file.
+    pub proxy_list: Arc<Vec<String>>,
+    /// Round-robin index into proxy_list.
+    pub proxy_index: Arc<AtomicUsize>,
+    /// Whether stealth mode is enabled.
+    pub stealth: bool,
+    /// Whether human-like input timing is enabled.
+    pub stealth_input: bool,
 }
 
 impl DaemonState {
@@ -257,11 +265,39 @@ impl DaemonState {
             stream_client: None,
             stream_server: None,
             engine: env::var("VEIL_ENGINE").unwrap_or_else(|_| "chrome".to_string()),
+            proxy_list: Arc::new(
+                env::var("VEIL_PROXY_LIST")
+                    .ok()
+                    .map(|s| {
+                        s.split(',')
+                            .map(|p| p.trim().to_string())
+                            .filter(|p| !p.is_empty())
+                            .collect()
+                    })
+                    .unwrap_or_default(),
+            ),
+            proxy_index: Arc::new(AtomicUsize::new(0)),
+            stealth: env::var("VEIL_STEALTH")
+                .map(|v| v != "false" && v != "0")
+                .unwrap_or(true),
+            stealth_input: env::var("VEIL_STEALTH_INPUT")
+                .map(|v| v == "1" || v == "true")
+                .unwrap_or(false),
         }
     }
 
     fn reset_input_state(&mut self) {
         self.mouse_state = MouseState::default();
+    }
+
+    /// Round-robin proxy selection from the proxy_list.
+    fn next_proxy(&self) -> Option<String> {
+        let list = &*self.proxy_list;
+        if list.is_empty() {
+            return None;
+        }
+        let idx = self.proxy_index.fetch_add(1, Ordering::Relaxed) % list.len();
+        Some(list[idx].clone())
     }
 
     /// Create state with an optional stream client slot and server instance
@@ -1300,8 +1336,17 @@ async fn connect_auto_with_fresh_tab() -> Result<BrowserManager, String> {
 }
 
 async fn auto_launch(state: &mut DaemonState) -> Result<(), String> {
-    let options = launch_options_from_env();
+    let mut options = launch_options_from_env();
     let engine = env::var("VEIL_ENGINE").ok();
+
+    // Apply proxy rotation if proxy_list is configured
+    if let Some(proxy) = state.next_proxy() {
+        options.proxy = Some(proxy);
+    }
+
+    // Sync stealth/stealth_input into daemon state
+    state.stealth = options.stealth;
+    state.stealth_input = options.stealth_input;
 
     // Store proxy credentials for Fetch.authRequired handling
     let has_proxy_auth = options.proxy_username.is_some();
@@ -1400,6 +1445,9 @@ fn launch_options_from_env() -> LaunchOptions {
         stealth: env::var("VEIL_STEALTH")
             .map(|v| v != "false" && v != "0")
             .unwrap_or(true),
+        stealth_input: env::var("VEIL_STEALTH_INPUT")
+            .map(|v| v == "1" || v == "true")
+            .unwrap_or(false),
     }
 }
 
@@ -1547,7 +1595,7 @@ async fn handle_launch(cmd: &Value, state: &mut DaemonState) -> Result<Value, St
         .map(String::from)
         .or_else(|| env::var("VEIL_ENGINE").ok());
 
-    let options = LaunchOptions {
+    let mut options = LaunchOptions {
         headless,
         executable_path: cmd
             .get("executablePath")
@@ -1617,7 +1665,22 @@ async fn handle_launch(cmd: &Value, state: &mut DaemonState) -> Result<Value, St
             .get("stealth")
             .and_then(|v| v.as_bool())
             .unwrap_or(true),
+        stealth_input: cmd
+            .get("stealth_input")
+            .and_then(|v| v.as_bool())
+            .unwrap_or(false),
     };
+
+    // Apply proxy rotation if proxy_list is configured
+    if options.proxy.is_none() {
+        if let Some(proxy) = state.next_proxy() {
+            options.proxy = Some(proxy);
+        }
+    }
+
+    // Sync stealth/stealth_input into daemon state
+    state.stealth = options.stealth;
+    state.stealth_input = options.stealth_input;
 
     // Store proxy credentials for Fetch.authRequired handling
     let has_proxy_auth = options.proxy_username.is_some();
@@ -2247,6 +2310,7 @@ async fn handle_click(cmd: &Value, state: &mut DaemonState) -> Result<Value, Str
         button,
         click_count,
         &state.iframe_sessions,
+        state.stealth_input,
     )
     .await?;
 
@@ -2267,6 +2331,7 @@ async fn handle_dblclick(cmd: &Value, state: &mut DaemonState) -> Result<Value, 
         &state.ref_map,
         selector,
         &state.iframe_sessions,
+        state.stealth_input,
     )
     .await?;
     Ok(json!({ "clicked": selector }))
@@ -2299,6 +2364,7 @@ async fn handle_fill(cmd: &Value, state: &mut DaemonState) -> Result<Value, Stri
         selector,
         value,
         &state.iframe_sessions,
+        state.stealth_input,
     )
     .await?;
     Ok(json!({ "filled": selector }))
@@ -2327,6 +2393,7 @@ async fn handle_type(cmd: &Value, state: &mut DaemonState) -> Result<Value, Stri
         clear,
         delay,
         &state.iframe_sessions,
+        state.stealth_input,
     )
     .await?;
     Ok(json!({ "typed": text }))
@@ -2487,6 +2554,7 @@ async fn handle_check(cmd: &Value, state: &mut DaemonState) -> Result<Value, Str
         &state.ref_map,
         selector,
         &state.iframe_sessions,
+        state.stealth_input,
     )
     .await?;
     Ok(json!({ "checked": selector }))
@@ -2506,6 +2574,7 @@ async fn handle_uncheck(cmd: &Value, state: &mut DaemonState) -> Result<Value, S
         &state.ref_map,
         selector,
         &state.iframe_sessions,
+        state.stealth_input,
     )
     .await?;
     Ok(json!({ "unchecked": selector }))
@@ -3220,7 +3289,7 @@ async fn handle_keyboard(cmd: &Value, state: &DaemonState) -> Result<Value, Stri
                 .get("text")
                 .and_then(|v| v.as_str())
                 .ok_or("Missing 'text' parameter")?;
-            interaction::type_text_into_active_context(&mgr.client, &session_id, text, None)
+            interaction::type_text_into_active_context(&mgr.client, &session_id, text, None, state.stealth_input)
                 .await?;
             return Ok(json!({ "typed": text }));
         }
@@ -3449,6 +3518,7 @@ async fn handle_download(cmd: &Value, state: &mut DaemonState) -> Result<Value, 
         "left",
         1,
         &state.iframe_sessions,
+        state.stealth_input,
     )
     .await?;
 
@@ -4872,6 +4942,7 @@ async fn execute_subaction(
                 "left",
                 1,
                 &state.iframe_sessions,
+                state.stealth_input,
             )
             .await?;
             Ok(json!({ "clicked": selector }))
@@ -4888,6 +4959,7 @@ async fn execute_subaction(
                 selector,
                 value,
                 &state.iframe_sessions,
+                state.stealth_input,
             )
             .await?;
             Ok(json!({ "filled": selector }))
@@ -4899,6 +4971,7 @@ async fn execute_subaction(
                 &state.ref_map,
                 selector,
                 &state.iframe_sessions,
+                state.stealth_input,
             )
             .await?;
             Ok(json!({ "checked": selector }))
@@ -6743,6 +6816,7 @@ async fn handle_auth_login(cmd: &Value, state: &mut DaemonState) -> Result<Value
         &user_sel,
         &username,
         &state.iframe_sessions,
+        state.stealth_input,
     )
     .await?;
 
@@ -6764,6 +6838,7 @@ async fn handle_auth_login(cmd: &Value, state: &mut DaemonState) -> Result<Value
         &pass_sel,
         &password,
         &state.iframe_sessions,
+        state.stealth_input,
     )
     .await?;
 
@@ -6796,6 +6871,7 @@ async fn handle_auth_login(cmd: &Value, state: &mut DaemonState) -> Result<Value
         "left",
         1,
         &state.iframe_sessions,
+        state.stealth_input,
     )
     .await?;
 
