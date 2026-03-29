@@ -201,6 +201,8 @@ pub struct BrowserManager {
     pub download_path: Option<String>,
     /// Origins visited during this session, used by save_state to collect cross-origin localStorage.
     visited_origins: HashSet<String>,
+    /// Whether stealth evasion scripts should be injected on every new document.
+    pub stealth: bool,
 }
 
 const LIGHTPANDA_CDP_CONNECT_TIMEOUT: Duration = Duration::from_secs(5);
@@ -237,6 +239,7 @@ impl BrowserManager {
         let user_agent = options.user_agent.clone();
         let color_scheme = options.color_scheme.clone();
         let download_path = options.download_path.clone();
+        let stealth = options.stealth;
 
         let (ws_url, process) = match engine {
             "lightpanda" => {
@@ -271,6 +274,7 @@ impl BrowserManager {
                 default_timeout_ms: 25_000,
                 download_path: download_path.clone(),
                 visited_origins: HashSet::new(),
+                stealth,
             };
             manager.discover_and_attach_targets().await?;
             manager
@@ -337,6 +341,7 @@ impl BrowserManager {
             default_timeout_ms: 10_000,
             download_path: None, // CDP connections don't have a launch-time download path
             visited_origins: HashSet::new(),
+            stealth: false,
         };
 
         manager.discover_and_attach_targets().await?;
@@ -462,6 +467,11 @@ impl BrowserManager {
                 Some(session_id),
             )
             .await;
+        if self.stealth {
+            if let Err(e) = crate::native::stealth::inject_stealth_scripts(&self.client, session_id).await {
+                eprintln!("[agent-browser] Stealth injection failed: {}. Continuing without stealth.", e);
+            }
+        }
         Ok(())
     }
 
@@ -1293,6 +1303,7 @@ async fn initialize_lightpanda_manager(
             default_timeout_ms: 25_000,
             download_path: None,
             visited_origins: HashSet::new(),
+            stealth: false,
         };
 
         match discover_and_attach_lightpanda_targets(&mut manager, deadline).await {

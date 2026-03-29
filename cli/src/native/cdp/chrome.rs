@@ -89,6 +89,7 @@ pub struct LaunchOptions {
     pub ignore_https_errors: bool,
     pub color_scheme: Option<String>,
     pub download_path: Option<String>,
+    pub stealth: bool,
 }
 
 impl Default for LaunchOptions {
@@ -109,6 +110,7 @@ impl Default for LaunchOptions {
             ignore_https_errors: false,
             color_scheme: None,
             download_path: None,
+            stealth: true,
         }
     }
 }
@@ -138,6 +140,10 @@ fn build_chrome_args(options: &LaunchOptions) -> Result<ChromeArgs, String> {
         "--password-store=basic".to_string(),
         "--use-mock-keychain".to_string(),
     ];
+
+    if options.stealth {
+        args.push("--disable-blink-features=AutomationControlled".to_string());
+    }
 
     let has_extensions = options
         .extensions
@@ -1021,6 +1027,44 @@ mod tests {
             .args
             .iter()
             .any(|a| a.starts_with("--load-extension=")));
+        if let Some(ref dir) = result.temp_user_data_dir {
+            let _ = std::fs::remove_dir_all(dir);
+        }
+    }
+
+    #[test]
+    fn test_build_args_stealth_adds_disable_blink_features() {
+        let opts = LaunchOptions {
+            stealth: true,
+            ..Default::default()
+        };
+        let result = build_chrome_args(&opts).unwrap();
+        assert!(
+            result
+                .args
+                .iter()
+                .any(|a| a == "--disable-blink-features=AutomationControlled"),
+            "stealth: true should add --disable-blink-features=AutomationControlled"
+        );
+        if let Some(ref dir) = result.temp_user_data_dir {
+            let _ = std::fs::remove_dir_all(dir);
+        }
+    }
+
+    #[test]
+    fn test_build_args_no_stealth_omits_disable_blink_features() {
+        let opts = LaunchOptions {
+            stealth: false,
+            ..Default::default()
+        };
+        let result = build_chrome_args(&opts).unwrap();
+        assert!(
+            !result
+                .args
+                .iter()
+                .any(|a| a == "--disable-blink-features=AutomationControlled"),
+            "stealth: false should not add --disable-blink-features=AutomationControlled"
+        );
         if let Some(ref dir) = result.temp_user_data_dir {
             let _ = std::fs::remove_dir_all(dir);
         }

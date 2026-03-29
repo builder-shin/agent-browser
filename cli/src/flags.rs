@@ -87,6 +87,7 @@ pub struct Config {
     pub screenshot_quality: Option<u32>,
     pub screenshot_format: Option<String>,
     pub idle_timeout: Option<String>,
+    pub stealth: Option<bool>,
 }
 
 impl Config {
@@ -132,6 +133,7 @@ impl Config {
             screenshot_quality: other.screenshot_quality.or(self.screenshot_quality),
             screenshot_format: other.screenshot_format.or(self.screenshot_format),
             idle_timeout: other.idle_timeout.or(self.idle_timeout),
+            stealth: other.stealth.or(self.stealth),
         }
     }
 }
@@ -313,6 +315,7 @@ pub struct Flags {
     pub cli_annotate: bool,
     pub cli_download_path: bool,
     pub cli_headed: bool,
+    pub stealth: bool,
 }
 
 pub fn parse_flags(args: &[String]) -> Flags {
@@ -441,6 +444,9 @@ pub fn parse_flags(args: &[String]) -> Flags {
         cli_annotate: false,
         cli_download_path: false,
         cli_headed: false,
+        stealth: env::var("AGENT_BROWSER_STEALTH")
+            .map(|v| v != "false" && v != "0")
+            .unwrap_or_else(|_| config.stealth.unwrap_or(true)),
     };
 
     let mut i = 0;
@@ -615,6 +621,9 @@ pub fn parse_flags(args: &[String]) -> Flags {
                     flags.cli_download_path = true;
                     i += 1;
                 }
+            }
+            "--no-stealth" => {
+                flags.stealth = false;
             }
             "--content-boundaries" => {
                 let (val, consumed) = parse_bool_arg(args, i);

@@ -1039,7 +1039,8 @@ fn main() {
         let mut launch_cmd = json!({
             "id": gen_id(),
             "action": "launch",
-            "headless": !flags.headed
+            "headless": !flags.headed,
+            "stealth": flags.stealth
         });
 
         let cmd_obj = launch_cmd
