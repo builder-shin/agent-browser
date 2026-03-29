@@ -61,3 +61,6 @@ docs/package-lock.json
 # next
 .next/
 out/
+
+# Claude Code
+.omc
