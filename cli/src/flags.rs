@@ -4,9 +4,9 @@ use std::env;
 use std::fs;
 use std::path::{Path, PathBuf};
 
-const CONFIG_DIR: &str = ".agent-browser";
+const CONFIG_DIR: &str = ".veil";
 const CONFIG_FILENAME: &str = "config.json";
-const PROJECT_CONFIG_FILENAME: &str = "agent-browser.json";
+const PROJECT_CONFIG_FILENAME: &str = "veil.json";
 
 /// Parse idle timeout from user-friendly format.
 /// Supports: "10s" (seconds), "3m" (minutes), "1h" (hours), or raw milliseconds.
@@ -237,9 +237,9 @@ pub fn load_config(args: &[String]) -> Result<Config, String> {
     let explicit = extract_config_path(args)
         .map(|p| ("--config", p))
         .or_else(|| {
-            env::var("AGENT_BROWSER_CONFIG")
+            env::var("VEIL_CONFIG")
                 .ok()
-                .map(|p| ("AGENT_BROWSER_CONFIG", Some(p)))
+                .map(|p| ("VEIL_CONFIG", Some(p)))
         });
 
     if let Some((source, maybe_path)) = explicit {
@@ -299,7 +299,7 @@ pub struct Flags {
     pub screenshot_dir: Option<String>,
     pub screenshot_quality: Option<u32>,
     pub screenshot_format: Option<String>,
-    pub idle_timeout: Option<String>, // Canonical milliseconds string for AGENT_BROWSER_IDLE_TIMEOUT_MS
+    pub idle_timeout: Option<String>, // Canonical milliseconds string for VEIL_IDLE_TIMEOUT_MS
 
     // Track which launch-time options were explicitly passed via CLI
     // (as opposed to being set only via environment variables)
@@ -324,7 +324,7 @@ pub fn parse_flags(args: &[String]) -> Flags {
         std::process::exit(1);
     });
 
-    let extensions_env = env::var("AGENT_BROWSER_EXTENSIONS")
+    let extensions_env = env::var("VEIL_EXTENSIONS")
         .ok()
         .map(|s| {
             s.split(',')
@@ -341,22 +341,22 @@ pub fn parse_flags(args: &[String]) -> Flags {
     };
 
     let mut flags = Flags {
-        json: env_var_is_truthy("AGENT_BROWSER_JSON") || config.json.unwrap_or(false),
-        headed: env_var_is_truthy("AGENT_BROWSER_HEADED") || config.headed.unwrap_or(false),
-        debug: env_var_is_truthy("AGENT_BROWSER_DEBUG") || config.debug.unwrap_or(false),
-        session: env::var("AGENT_BROWSER_SESSION")
+        json: env_var_is_truthy("VEIL_JSON") || config.json.unwrap_or(false),
+        headed: env_var_is_truthy("VEIL_HEADED") || config.headed.unwrap_or(false),
+        debug: env_var_is_truthy("VEIL_DEBUG") || config.debug.unwrap_or(false),
+        session: env::var("VEIL_SESSION")
             .ok()
             .or(config.session)
             .unwrap_or_else(|| "default".to_string()),
         headers: config.headers,
-        executable_path: env::var("AGENT_BROWSER_EXECUTABLE_PATH")
+        executable_path: env::var("VEIL_EXECUTABLE_PATH")
             .ok()
             .or(config.executable_path),
         cdp: config.cdp,
         extensions,
-        profile: env::var("AGENT_BROWSER_PROFILE").ok().or(config.profile),
-        state: env::var("AGENT_BROWSER_STATE").ok().or(config.state),
-        proxy: env::var("AGENT_BROWSER_PROXY")
+        profile: env::var("VEIL_PROFILE").ok().or(config.profile),
+        state: env::var("VEIL_STATE").ok().or(config.state),
+        proxy: env::var("VEIL_PROXY")
             .ok()
             .or(config.proxy)
             .or_else(|| env::var("HTTP_PROXY").ok())
@@ -365,40 +365,40 @@ pub fn parse_flags(args: &[String]) -> Flags {
             .or_else(|| env::var("https_proxy").ok())
             .or_else(|| env::var("ALL_PROXY").ok())
             .or_else(|| env::var("all_proxy").ok()),
-        proxy_bypass: env::var("AGENT_BROWSER_PROXY_BYPASS")
+        proxy_bypass: env::var("VEIL_PROXY_BYPASS")
             .ok()
             .or(config.proxy_bypass)
             .or_else(|| env::var("NO_PROXY").ok())
             .or_else(|| env::var("no_proxy").ok()),
-        args: env::var("AGENT_BROWSER_ARGS").ok().or(config.args),
-        user_agent: env::var("AGENT_BROWSER_USER_AGENT")
+        args: env::var("VEIL_ARGS").ok().or(config.args),
+        user_agent: env::var("VEIL_USER_AGENT")
             .ok()
             .or(config.user_agent),
-        provider: env::var("AGENT_BROWSER_PROVIDER").ok().or(config.provider),
-        ignore_https_errors: env_var_is_truthy("AGENT_BROWSER_IGNORE_HTTPS_ERRORS")
+        provider: env::var("VEIL_PROVIDER").ok().or(config.provider),
+        ignore_https_errors: env_var_is_truthy("VEIL_IGNORE_HTTPS_ERRORS")
             || config.ignore_https_errors.unwrap_or(false),
-        allow_file_access: env_var_is_truthy("AGENT_BROWSER_ALLOW_FILE_ACCESS")
+        allow_file_access: env_var_is_truthy("VEIL_ALLOW_FILE_ACCESS")
             || config.allow_file_access.unwrap_or(false),
-        device: env::var("AGENT_BROWSER_IOS_DEVICE").ok().or(config.device),
-        auto_connect: env_var_is_truthy("AGENT_BROWSER_AUTO_CONNECT")
+        device: env::var("VEIL_IOS_DEVICE").ok().or(config.device),
+        auto_connect: env_var_is_truthy("VEIL_AUTO_CONNECT")
             || config.auto_connect.unwrap_or(false),
-        session_name: env::var("AGENT_BROWSER_SESSION_NAME")
+        session_name: env::var("VEIL_SESSION_NAME")
             .ok()
             .or(config.session_name),
-        annotate: env_var_is_truthy("AGENT_BROWSER_ANNOTATE") || config.annotate.unwrap_or(false),
-        color_scheme: env::var("AGENT_BROWSER_COLOR_SCHEME")
+        annotate: env_var_is_truthy("VEIL_ANNOTATE") || config.annotate.unwrap_or(false),
+        color_scheme: env::var("VEIL_COLOR_SCHEME")
             .ok()
             .or(config.color_scheme),
-        download_path: env::var("AGENT_BROWSER_DOWNLOAD_PATH")
+        download_path: env::var("VEIL_DOWNLOAD_PATH")
             .ok()
             .or(config.download_path),
-        content_boundaries: env_var_is_truthy("AGENT_BROWSER_CONTENT_BOUNDARIES")
+        content_boundaries: env_var_is_truthy("VEIL_CONTENT_BOUNDARIES")
             || config.content_boundaries.unwrap_or(false),
-        max_output: env::var("AGENT_BROWSER_MAX_OUTPUT")
+        max_output: env::var("VEIL_MAX_OUTPUT")
             .ok()
             .and_then(|s| s.parse().ok())
             .or(config.max_output),
-        allowed_domains: env::var("AGENT_BROWSER_ALLOWED_DOMAINS")
+        allowed_domains: env::var("VEIL_ALLOWED_DOMAINS")
             .ok()
             .map(|s| {
                 s.split(',')
@@ -407,29 +407,29 @@ pub fn parse_flags(args: &[String]) -> Flags {
                     .collect()
             })
             .or(config.allowed_domains),
-        action_policy: env::var("AGENT_BROWSER_ACTION_POLICY")
+        action_policy: env::var("VEIL_ACTION_POLICY")
             .ok()
             .or(config.action_policy),
-        confirm_actions: env::var("AGENT_BROWSER_CONFIRM_ACTIONS")
+        confirm_actions: env::var("VEIL_CONFIRM_ACTIONS")
             .ok()
             .or(config.confirm_actions),
-        confirm_interactive: env_var_is_truthy("AGENT_BROWSER_CONFIRM_INTERACTIVE")
+        confirm_interactive: env_var_is_truthy("VEIL_CONFIRM_INTERACTIVE")
             || config.confirm_interactive.unwrap_or(false),
-        engine: env::var("AGENT_BROWSER_ENGINE").ok().or(config.engine),
-        screenshot_dir: env::var("AGENT_BROWSER_SCREENSHOT_DIR")
+        engine: env::var("VEIL_ENGINE").ok().or(config.engine),
+        screenshot_dir: env::var("VEIL_SCREENSHOT_DIR")
             .ok()
             .or(config.screenshot_dir),
-        screenshot_quality: env::var("AGENT_BROWSER_SCREENSHOT_QUALITY")
+        screenshot_quality: env::var("VEIL_SCREENSHOT_QUALITY")
             .ok()
             .and_then(|s| s.parse().ok())
             .or(config.screenshot_quality),
-        screenshot_format: env::var("AGENT_BROWSER_SCREENSHOT_FORMAT")
+        screenshot_format: env::var("VEIL_SCREENSHOT_FORMAT")
             .ok()
             .or(config.screenshot_format)
             .filter(|s| s == "png" || s == "jpeg"),
         idle_timeout: parse_idle_timeout_value(
-            env::var("AGENT_BROWSER_IDLE_TIMEOUT_MS").ok(),
-            "AGENT_BROWSER_IDLE_TIMEOUT_MS",
+            env::var("VEIL_IDLE_TIMEOUT_MS").ok(),
+            "VEIL_IDLE_TIMEOUT_MS",
         )
         .or(config.idle_timeout),
         cli_executable_path: false,
@@ -444,7 +444,7 @@ pub fn parse_flags(args: &[String]) -> Flags {
         cli_annotate: false,
         cli_download_path: false,
         cli_headed: false,
-        stealth: env::var("AGENT_BROWSER_STEALTH")
+        stealth: env::var("VEIL_STEALTH")
             .map(|v| v != "false" && v != "0")
             .unwrap_or_else(|_| config.stealth.unwrap_or(true)),
     };
@@ -1170,7 +1170,7 @@ mod tests {
 
     #[test]
     fn test_load_config_missing_file_returns_none() {
-        let result = read_config_file(&PathBuf::from("/nonexistent/agent-browser.json"));
+        let result = read_config_file(&PathBuf::from("/nonexistent/veil.json"));
         assert!(result.is_none());
     }
 

@@ -158,10 +158,10 @@ async fn e2e_lightpanda_auto_launch_can_open_page() {
         _ => return,
     };
 
-    let prev_engine = std::env::var("AGENT_BROWSER_ENGINE").ok();
-    let prev_path = std::env::var("AGENT_BROWSER_EXECUTABLE_PATH").ok();
-    std::env::set_var("AGENT_BROWSER_ENGINE", "lightpanda");
-    std::env::set_var("AGENT_BROWSER_EXECUTABLE_PATH", &lightpanda_bin);
+    let prev_engine = std::env::var("VEIL_ENGINE").ok();
+    let prev_path = std::env::var("VEIL_EXECUTABLE_PATH").ok();
+    std::env::set_var("VEIL_ENGINE", "lightpanda");
+    std::env::set_var("VEIL_EXECUTABLE_PATH", &lightpanda_bin);
 
     let mut state = DaemonState::new();
 
@@ -176,12 +176,12 @@ async fn e2e_lightpanda_auto_launch_can_open_page() {
     .expect("Lightpanda auto-launch should not hang");
 
     match prev_engine {
-        Some(value) => std::env::set_var("AGENT_BROWSER_ENGINE", value),
-        None => std::env::remove_var("AGENT_BROWSER_ENGINE"),
+        Some(value) => std::env::set_var("VEIL_ENGINE", value),
+        None => std::env::remove_var("VEIL_ENGINE"),
     }
     match prev_path {
-        Some(value) => std::env::set_var("AGENT_BROWSER_EXECUTABLE_PATH", value),
-        None => std::env::remove_var("AGENT_BROWSER_EXECUTABLE_PATH"),
+        Some(value) => std::env::set_var("VEIL_EXECUTABLE_PATH", value),
+        None => std::env::remove_var("VEIL_EXECUTABLE_PATH"),
     }
 
     assert_success(&resp);
@@ -200,7 +200,7 @@ async fn e2e_lightpanda_auto_launch_can_open_page() {
 #[tokio::test]
 #[ignore]
 async fn e2e_runtime_stream_enable_before_launch_attaches_and_disables() {
-    let guard = EnvGuard::new(&["AGENT_BROWSER_SOCKET_DIR", "AGENT_BROWSER_SESSION"]);
+    let guard = EnvGuard::new(&["VEIL_SOCKET_DIR", "VEIL_SESSION"]);
     let socket_dir = std::env::temp_dir().join(format!(
         "agent-browser-e2e-stream-{}-{}",
         std::process::id(),
@@ -211,10 +211,10 @@ async fn e2e_runtime_stream_enable_before_launch_attaches_and_disables() {
     ));
     std::fs::create_dir_all(&socket_dir).expect("socket dir should be created");
     guard.set(
-        "AGENT_BROWSER_SOCKET_DIR",
+        "VEIL_SOCKET_DIR",
         socket_dir.to_str().expect("socket dir should be utf-8"),
     );
-    guard.set("AGENT_BROWSER_SESSION", "e2e-runtime-stream");
+    guard.set("VEIL_SESSION", "e2e-runtime-stream");
 
     let mut state = DaemonState::new();
 

@@ -91,7 +91,7 @@ impl StreamServer {
 
     /// Resolve the dashboard directory if it exists.
     fn resolve_dashboard_dir() -> Option<PathBuf> {
-        let dir = dirs::home_dir()?.join(".agent-browser").join("dashboard");
+        let dir = dirs::home_dir()?.join(".veil").join("dashboard");
         if dir.join("index.html").exists() {
             Some(dir)
         } else {
@@ -1283,7 +1283,7 @@ fn serve_static_file(dir: &Path, url_path: &str) -> (&'static str, &'static str,
 
 const DASHBOARD_NOT_INSTALLED_HTML: &str = r#"<!DOCTYPE html>
 <html lang="en">
-<head><meta charset="utf-8"><title>agent-browser</title>
+<head><meta charset="utf-8"><title>veil</title>
 <style>
 body { font-family: system-ui, sans-serif; display: flex; justify-content: center; align-items: center; height: 100vh; margin: 0; background: #0a0a0a; color: #e5e5e5; }
 .card { text-align: center; max-width: 400px; }
@@ -1293,7 +1293,7 @@ code { background: #262626; padding: 2px 8px; border-radius: 4px; font-size: 14p
 <body>
 <div class="card">
 <h2>Dashboard not installed</h2>
-<p>Run <code>agent-browser dashboard install</code> to download the dashboard.</p>
+<p>Run <code>veil dashboard install</code> to download the dashboard.</p>
 </div>
 </body>
 </html>"#;
@@ -1626,7 +1626,7 @@ async fn read_post_body(stream: &mut tokio::net::TcpStream, initial: &[u8], n: u
     String::new()
 }
 
-/// Execute an agent-browser CLI command and return JSON with stdout/stderr.
+/// Execute a veil CLI command and return JSON with stdout/stderr.
 async fn exec_cli(body: &str) -> Result<String, String> {
     let parsed: Value = serde_json::from_str(body).map_err(|e| format!("Invalid JSON: {}", e))?;
     let args: Vec<String> = parsed
@@ -1646,9 +1646,9 @@ async fn exec_cli(body: &str) -> Result<String, String> {
     let mut cmd = tokio::process::Command::new(&exe);
     cmd.args(&args)
         .arg("--json")
-        .env_remove("AGENT_BROWSER_DASHBOARD")
-        .env_remove("AGENT_BROWSER_DASHBOARD_PORT")
-        .env_remove("AGENT_BROWSER_STREAM_PORT");
+        .env_remove("VEIL_DASHBOARD")
+        .env_remove("VEIL_DASHBOARD_PORT")
+        .env_remove("VEIL_STREAM_PORT");
 
     let output = cmd
         .output()

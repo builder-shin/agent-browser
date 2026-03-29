@@ -26,7 +26,7 @@ pub async fn run_daemon(session: &str) {
     // output can be inspected (the daemon normally has stderr piped to its
     // parent which drops the read end after startup).
     #[cfg(unix)]
-    if env::var("AGENT_BROWSER_DEBUG").is_ok() {
+    if env::var("VEIL_DEBUG").is_ok() {
         let log_path = socket_dir.join(format!("{}.log", session));
         if let Ok(file) = fs::File::create(&log_path) {
             use std::os::unix::io::IntoRawFd;
@@ -65,7 +65,7 @@ pub async fn run_daemon(session: &str) {
     let _ = fs::remove_file(socket_dir.join(format!("{}.engine", session)));
     let _ = fs::remove_file(socket_dir.join(format!("{}.extensions", session)));
 
-    if let Ok(days_str) = env::var("AGENT_BROWSER_STATE_EXPIRE_DAYS") {
+    if let Ok(days_str) = env::var("VEIL_STATE_EXPIRE_DAYS") {
         if let Ok(days) = days_str.parse::<u64>() {
             if days > 0 {
                 let _ = state::state_clean(days);
@@ -75,7 +75,7 @@ pub async fn run_daemon(session: &str) {
 
     let mut stream_client: Option<Arc<RwLock<Option<Arc<CdpClient>>>>> = None;
     let mut stream_server_instance: Option<Arc<StreamServer>> = None;
-    let preferred_port = env::var("AGENT_BROWSER_STREAM_PORT")
+    let preferred_port = env::var("VEIL_STREAM_PORT")
         .ok()
         .and_then(|s| s.parse::<u16>().ok())
         .unwrap_or(0);
@@ -94,7 +94,7 @@ pub async fn run_daemon(session: &str) {
 
     // Auto-shutdown the daemon after this many ms of inactivity (no commands received).
     // Disabled when unset or 0.
-    let idle_timeout_ms = env::var("AGENT_BROWSER_IDLE_TIMEOUT_MS")
+    let idle_timeout_ms = env::var("VEIL_IDLE_TIMEOUT_MS")
         .ok()
         .and_then(|s| s.parse::<u64>().ok())
         .filter(|&ms| ms > 0);
@@ -447,7 +447,7 @@ async fn shutdown_signal() {
 }
 
 fn get_daemon_socket_dir() -> PathBuf {
-    if let Ok(dir) = env::var("AGENT_BROWSER_SOCKET_DIR") {
+    if let Ok(dir) = env::var("VEIL_SOCKET_DIR") {
         if !dir.is_empty() {
             return PathBuf::from(dir);
         }
@@ -455,15 +455,15 @@ fn get_daemon_socket_dir() -> PathBuf {
 
     if let Ok(xdg) = env::var("XDG_RUNTIME_DIR") {
         if !xdg.is_empty() {
-            return PathBuf::from(xdg).join("agent-browser");
+            return PathBuf::from(xdg).join("veil");
         }
     }
 
     if let Some(home) = dirs::home_dir() {
-        return home.join(".agent-browser");
+        return home.join(".veil");
     }
 
-    std::env::temp_dir().join("agent-browser")
+    std::env::temp_dir().join("veil")
 }
 
 #[cfg(windows)]

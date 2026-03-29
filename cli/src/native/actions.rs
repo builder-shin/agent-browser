@@ -226,14 +226,14 @@ impl DaemonState {
             backend_type: BackendType::Cdp,
             ref_map: RefMap::new(),
             domain_filter: Arc::new(RwLock::new(
-                env::var("AGENT_BROWSER_ALLOWED_DOMAINS")
+                env::var("VEIL_ALLOWED_DOMAINS")
                     .ok()
                     .filter(|s| !s.is_empty())
                     .map(|s| DomainFilter::new(&s)),
             )),
             event_tracker: EventTracker::new(),
-            session_name: env::var("AGENT_BROWSER_SESSION_NAME").ok(),
-            session_id: env::var("AGENT_BROWSER_SESSION").unwrap_or_else(|_| "default".to_string()),
+            session_name: env::var("VEIL_SESSION_NAME").ok(),
+            session_id: env::var("VEIL_SESSION").unwrap_or_else(|_| "default".to_string()),
             tracing_state: TracingState::new(),
             recording_state: RecordingState::new(),
             event_rx: None,
@@ -256,7 +256,7 @@ impl DaemonState {
             pending_dialog: None,
             stream_client: None,
             stream_server: None,
-            engine: env::var("AGENT_BROWSER_ENGINE").unwrap_or_else(|_| "chrome".to_string()),
+            engine: env::var("VEIL_ENGINE").unwrap_or_else(|_| "chrome".to_string()),
         }
     }
 
@@ -987,7 +987,7 @@ pub async fn execute_command(cmd: &Value, state: &mut DaemonState) -> Value {
         }
     }
 
-    // Check AGENT_BROWSER_CONFIRM_ACTIONS (category-based, independent of policy file)
+    // Check VEIL_CONFIRM_ACTIONS (category-based, independent of policy file)
     if action != "confirm" && action != "deny" {
         if let Some(ref ca) = state.confirm_actions {
             if ca.requires_confirmation(action) {
@@ -1301,7 +1301,7 @@ async fn connect_auto_with_fresh_tab() -> Result<BrowserManager, String> {
 
 async fn auto_launch(state: &mut DaemonState) -> Result<(), String> {
     let options = launch_options_from_env();
-    let engine = env::var("AGENT_BROWSER_ENGINE").ok();
+    let engine = env::var("VEIL_ENGINE").ok();
 
     // Store proxy credentials for Fetch.authRequired handling
     let has_proxy_auth = options.proxy_username.is_some();
@@ -1317,7 +1317,7 @@ async fn auto_launch(state: &mut DaemonState) -> Result<(), String> {
     write_engine_file(&state.session_id, &state.engine);
     write_extensions_file(&state.session_id);
 
-    if let Ok(cdp) = env::var("AGENT_BROWSER_CDP") {
+    if let Ok(cdp) = env::var("VEIL_CDP") {
         let mgr = BrowserManager::connect_cdp(&cdp).await?;
         state.reset_input_state();
         state.browser = Some(mgr);
@@ -1328,7 +1328,7 @@ async fn auto_launch(state: &mut DaemonState) -> Result<(), String> {
         return Ok(());
     }
 
-    if env::var("AGENT_BROWSER_AUTO_CONNECT").is_ok() {
+    if env::var("VEIL_AUTO_CONNECT").is_ok() {
         state.reset_input_state();
         state.browser = Some(connect_auto_with_fresh_tab().await?);
         state.subscribe_to_browser_events();
@@ -1359,11 +1359,11 @@ async fn auto_launch(state: &mut DaemonState) -> Result<(), String> {
 }
 
 fn launch_options_from_env() -> LaunchOptions {
-    let headed = env::var("AGENT_BROWSER_HEADED")
+    let headed = env::var("VEIL_HEADED")
         .map(|v| v == "1" || v == "true")
         .unwrap_or(false);
 
-    let extensions: Option<Vec<String>> = env::var("AGENT_BROWSER_EXTENSIONS").ok().map(|v| {
+    let extensions: Option<Vec<String>> = env::var("VEIL_EXTENSIONS").ok().map(|v| {
         v.split([',', '\n'])
             .map(|s| s.trim().to_string())
             .filter(|s| !s.is_empty())
@@ -1372,16 +1372,16 @@ fn launch_options_from_env() -> LaunchOptions {
 
     LaunchOptions {
         headless: !headed,
-        executable_path: env::var("AGENT_BROWSER_EXECUTABLE_PATH").ok(),
-        proxy: env::var("AGENT_BROWSER_PROXY").ok(),
-        proxy_bypass: env::var("AGENT_BROWSER_PROXY_BYPASS").ok(),
-        proxy_username: env::var("AGENT_BROWSER_PROXY_USERNAME").ok(),
-        proxy_password: env::var("AGENT_BROWSER_PROXY_PASSWORD").ok(),
-        profile: env::var("AGENT_BROWSER_PROFILE").ok(),
-        allow_file_access: env::var("AGENT_BROWSER_ALLOW_FILE_ACCESS")
+        executable_path: env::var("VEIL_EXECUTABLE_PATH").ok(),
+        proxy: env::var("VEIL_PROXY").ok(),
+        proxy_bypass: env::var("VEIL_PROXY_BYPASS").ok(),
+        proxy_username: env::var("VEIL_PROXY_USERNAME").ok(),
+        proxy_password: env::var("VEIL_PROXY_PASSWORD").ok(),
+        profile: env::var("VEIL_PROFILE").ok(),
+        allow_file_access: env::var("VEIL_ALLOW_FILE_ACCESS")
             .map(|v| v == "1" || v == "true")
             .unwrap_or(false),
-        args: env::var("AGENT_BROWSER_ARGS")
+        args: env::var("VEIL_ARGS")
             .map(|v| {
                 v.split([',', '\n'])
                     .map(|s| s.trim().to_string())
@@ -1390,14 +1390,14 @@ fn launch_options_from_env() -> LaunchOptions {
             })
             .unwrap_or_default(),
         extensions,
-        storage_state: env::var("AGENT_BROWSER_STATE").ok(),
-        user_agent: env::var("AGENT_BROWSER_USER_AGENT").ok(),
-        ignore_https_errors: env::var("AGENT_BROWSER_IGNORE_HTTPS_ERRORS")
+        storage_state: env::var("VEIL_STATE").ok(),
+        user_agent: env::var("VEIL_USER_AGENT").ok(),
+        ignore_https_errors: env::var("VEIL_IGNORE_HTTPS_ERRORS")
             .map(|v| v == "1" || v == "true")
             .unwrap_or(false),
-        color_scheme: env::var("AGENT_BROWSER_COLOR_SCHEME").ok(),
-        download_path: env::var("AGENT_BROWSER_DOWNLOAD_PATH").ok(),
-        stealth: env::var("AGENT_BROWSER_STEALTH")
+        color_scheme: env::var("VEIL_COLOR_SCHEME").ok(),
+        download_path: env::var("VEIL_DOWNLOAD_PATH").ok(),
+        stealth: env::var("VEIL_STEALTH")
             .map(|v| v != "false" && v != "0")
             .unwrap_or(true),
     }
@@ -1472,7 +1472,7 @@ async fn handle_launch(cmd: &Value, state: &mut DaemonState) -> Result<Value, St
         .get("executablePath")
         .and_then(|v| v.as_str())
         .map(String::from)
-        .or_else(|| std::env::var("AGENT_BROWSER_EXECUTABLE_PATH").ok());
+        .or_else(|| std::env::var("VEIL_EXECUTABLE_PATH").ok());
 
     let has_cdp = cdp_url.is_some() || cdp_port.is_some();
     super::browser::validate_launch_options(
@@ -1545,7 +1545,7 @@ async fn handle_launch(cmd: &Value, state: &mut DaemonState) -> Result<Value, St
         .get("engine")
         .and_then(|v| v.as_str())
         .map(String::from)
-        .or_else(|| env::var("AGENT_BROWSER_ENGINE").ok());
+        .or_else(|| env::var("VEIL_ENGINE").ok());
 
     let options = LaunchOptions {
         headless,
@@ -1553,7 +1553,7 @@ async fn handle_launch(cmd: &Value, state: &mut DaemonState) -> Result<Value, St
             .get("executablePath")
             .and_then(|v| v.as_str())
             .map(|s| s.to_string())
-            .or_else(|| env::var("AGENT_BROWSER_EXECUTABLE_PATH").ok()),
+            .or_else(|| env::var("VEIL_EXECUTABLE_PATH").ok()),
         proxy: cmd.get("proxy").and_then(|v| {
             v.as_str().map(|s| s.to_string()).or_else(|| {
                 v.get("server")
@@ -1590,13 +1590,13 @@ async fn handle_launch(cmd: &Value, state: &mut DaemonState) -> Result<Value, St
             .and_then(|v| v.get("username"))
             .and_then(|v| v.as_str())
             .map(String::from)
-            .or_else(|| env::var("AGENT_BROWSER_PROXY_USERNAME").ok()),
+            .or_else(|| env::var("VEIL_PROXY_USERNAME").ok()),
         proxy_password: cmd
             .get("proxy")
             .and_then(|v| v.get("password"))
             .and_then(|v| v.as_str())
             .map(String::from)
-            .or_else(|| env::var("AGENT_BROWSER_PROXY_PASSWORD").ok()),
+            .or_else(|| env::var("VEIL_PROXY_PASSWORD").ok()),
         user_agent: cmd
             .get("userAgent")
             .and_then(|v| v.as_str())
@@ -3779,7 +3779,7 @@ async fn handle_pdf(cmd: &Value, state: &DaemonState) -> Result<Value, String> {
         None => {
             let dir = dirs::home_dir()
                 .unwrap_or_else(std::env::temp_dir)
-                .join(".agent-browser")
+                .join(".veil")
                 .join("tmp")
                 .join("pdfs");
             let _ = std::fs::create_dir_all(&dir);
@@ -4464,7 +4464,7 @@ fn extensions_file_path(session_id: &str) -> PathBuf {
 }
 
 fn write_extensions_file(session_id: &str) {
-    if let Ok(val) = env::var("AGENT_BROWSER_EXTENSIONS") {
+    if let Ok(val) = env::var("VEIL_EXTENSIONS") {
         let trimmed = val.trim();
         if !trimmed.is_empty() {
             let _ = fs::write(extensions_file_path(session_id), trimmed);
@@ -6034,9 +6034,9 @@ fn har_output_path(explicit_path: Option<&str>) -> String {
 
 fn get_har_dir() -> PathBuf {
     if let Some(home) = dirs::home_dir() {
-        home.join(".agent-browser").join("tmp").join("har")
+        home.join(".veil").join("tmp").join("har")
     } else {
-        std::env::temp_dir().join("agent-browser").join("har")
+        std::env::temp_dir().join("veil").join("har")
     }
 }
 
@@ -7322,14 +7322,14 @@ mod tests {
 
     #[tokio::test]
     async fn test_stream_enable_disable_and_status_without_browser() {
-        let guard = EnvGuard::new(&["AGENT_BROWSER_SOCKET_DIR", "AGENT_BROWSER_SESSION"]);
+        let guard = EnvGuard::new(&["VEIL_SOCKET_DIR", "VEIL_SESSION"]);
         let socket_dir = unique_socket_dir("stream-runtime");
         fs::create_dir_all(&socket_dir).expect("socket dir should be created");
         guard.set(
-            "AGENT_BROWSER_SOCKET_DIR",
+            "VEIL_SOCKET_DIR",
             socket_dir.to_str().expect("socket dir should be utf-8"),
         );
-        guard.set("AGENT_BROWSER_SESSION", "stream-runtime-session");
+        guard.set("VEIL_SESSION", "stream-runtime-session");
 
         let mut state = DaemonState::new();
 
@@ -7395,15 +7395,15 @@ mod tests {
 
     #[tokio::test]
     async fn test_stream_disable_preserves_existing_screencast_state() {
-        let guard = EnvGuard::new(&["AGENT_BROWSER_SOCKET_DIR", "AGENT_BROWSER_SESSION"]);
+        let guard = EnvGuard::new(&["VEIL_SOCKET_DIR", "VEIL_SESSION"]);
         let socket_dir = unique_socket_dir("stream-preserve-screencast");
         fs::create_dir_all(&socket_dir).expect("socket dir should be created");
         guard.set(
-            "AGENT_BROWSER_SOCKET_DIR",
+            "VEIL_SOCKET_DIR",
             socket_dir.to_str().expect("socket dir should be utf-8"),
         );
         guard.set(
-            "AGENT_BROWSER_SESSION",
+            "VEIL_SESSION",
             "stream-preserve-screencast-session",
         );
 
@@ -7427,14 +7427,14 @@ mod tests {
 
     #[tokio::test]
     async fn test_stream_disable_clears_state_when_stream_file_removal_fails() {
-        let guard = EnvGuard::new(&["AGENT_BROWSER_SOCKET_DIR", "AGENT_BROWSER_SESSION"]);
+        let guard = EnvGuard::new(&["VEIL_SOCKET_DIR", "VEIL_SESSION"]);
         let socket_dir = unique_socket_dir("stream-disable-cleanup");
         fs::create_dir_all(&socket_dir).expect("socket dir should be created");
         guard.set(
-            "AGENT_BROWSER_SOCKET_DIR",
+            "VEIL_SOCKET_DIR",
             socket_dir.to_str().expect("socket dir should be utf-8"),
         );
-        guard.set("AGENT_BROWSER_SESSION", "stream-disable-cleanup-session");
+        guard.set("VEIL_SESSION", "stream-disable-cleanup-session");
 
         let mut state = DaemonState::new();
         handle_stream_enable(&json!({ "port": 0 }), &mut state)
@@ -7463,14 +7463,14 @@ mod tests {
 
     #[tokio::test]
     async fn test_stream_enable_port_conflict_returns_error() {
-        let guard = EnvGuard::new(&["AGENT_BROWSER_SOCKET_DIR", "AGENT_BROWSER_SESSION"]);
+        let guard = EnvGuard::new(&["VEIL_SOCKET_DIR", "VEIL_SESSION"]);
         let socket_dir = unique_socket_dir("stream-port-conflict");
         fs::create_dir_all(&socket_dir).expect("socket dir should be created");
         guard.set(
-            "AGENT_BROWSER_SOCKET_DIR",
+            "VEIL_SOCKET_DIR",
             socket_dir.to_str().expect("socket dir should be utf-8"),
         );
-        guard.set("AGENT_BROWSER_SESSION", "stream-port-conflict-session");
+        guard.set("VEIL_SESSION", "stream-port-conflict-session");
 
         let listener = std::net::TcpListener::bind("127.0.0.1:0")
             .expect("test should reserve an ephemeral port");
@@ -7517,13 +7517,13 @@ mod tests {
     #[tokio::test]
     async fn test_daemon_state_new() {
         let guard = EnvGuard::new(&[
-            "AGENT_BROWSER_ALLOWED_DOMAINS",
-            "AGENT_BROWSER_SESSION_NAME",
-            "AGENT_BROWSER_SESSION",
+            "VEIL_ALLOWED_DOMAINS",
+            "VEIL_SESSION_NAME",
+            "VEIL_SESSION",
         ]);
-        guard.remove("AGENT_BROWSER_ALLOWED_DOMAINS");
-        guard.remove("AGENT_BROWSER_SESSION_NAME");
-        guard.remove("AGENT_BROWSER_SESSION");
+        guard.remove("VEIL_ALLOWED_DOMAINS");
+        guard.remove("VEIL_SESSION_NAME");
+        guard.remove("VEIL_SESSION");
 
         let state = DaemonState::new();
         assert!(state.browser.is_none());
@@ -7625,7 +7625,7 @@ mod tests {
 
     #[test]
     fn test_launch_options_from_env_defaults() {
-        let _guard = EnvGuard::new(&["AGENT_BROWSER_HEADED"]);
+        let _guard = EnvGuard::new(&["VEIL_HEADED"]);
         let opts = launch_options_from_env();
         assert!(opts.headless);
         assert!(opts.args.is_empty());
@@ -7634,12 +7634,12 @@ mod tests {
 
     #[test]
     fn test_launch_options_from_env_headed_flag() {
-        let _guard = EnvGuard::new(&["AGENT_BROWSER_HEADED"]);
-        _guard.set("AGENT_BROWSER_HEADED", "1");
+        let _guard = EnvGuard::new(&["VEIL_HEADED"]);
+        _guard.set("VEIL_HEADED", "1");
         let opts = launch_options_from_env();
         assert!(
             !opts.headless,
-            "AGENT_BROWSER_HEADED=1 should set headless=false"
+            "VEIL_HEADED=1 should set headless=false"
         );
     }
 
@@ -7944,7 +7944,7 @@ mod tests {
     #[allow(clippy::await_holding_lock)]
     async fn test_credentials_roundtrip_via_actions() {
         let _lock = crate::native::auth::AUTH_TEST_MUTEX.lock().unwrap();
-        let key_var = "AGENT_BROWSER_ENCRYPTION_KEY";
+        let key_var = "VEIL_ENCRYPTION_KEY";
         let original = std::env::var(key_var).ok();
         // SAFETY: AUTH_TEST_MUTEX serializes all test access so no concurrent mutation.
         unsafe { std::env::set_var(key_var, "a".repeat(64)) };

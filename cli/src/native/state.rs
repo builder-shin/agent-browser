@@ -320,7 +320,7 @@ pub async fn save_state(
         }
     };
 
-    if let Ok(key) = std::env::var("AGENT_BROWSER_ENCRYPTION_KEY") {
+    if let Ok(key) = std::env::var("VEIL_ENCRYPTION_KEY") {
         let encrypted = encrypt_data(json_str.as_bytes(), &key)?;
         save_path.push_str(".enc");
         fs::write(&save_path, &encrypted)
@@ -335,8 +335,8 @@ pub async fn save_state(
 
 pub async fn load_state(client: &CdpClient, session_id: &str, path: &str) -> Result<(), String> {
     let json_str = if path.ends_with(".enc") {
-        let key = std::env::var("AGENT_BROWSER_ENCRYPTION_KEY").map_err(|_| {
-            "Encrypted state file requires AGENT_BROWSER_ENCRYPTION_KEY".to_string()
+        let key = std::env::var("VEIL_ENCRYPTION_KEY").map_err(|_| {
+            "Encrypted state file requires VEIL_ENCRYPTION_KEY".to_string()
         })?;
         let data =
             fs::read(path).map_err(|e| format!("Failed to read state from {}: {}", path, e))?;
@@ -347,7 +347,7 @@ pub async fn load_state(client: &CdpClient, session_id: &str, path: &str) -> Res
         match fs::read_to_string(path) {
             Ok(s) => s,
             Err(e) => {
-                if let Ok(key) = std::env::var("AGENT_BROWSER_ENCRYPTION_KEY") {
+                if let Ok(key) = std::env::var("VEIL_ENCRYPTION_KEY") {
                     let enc_path = format!("{}.enc", path);
                     if let Ok(data) = fs::read(&enc_path) {
                         let decrypted = decrypt_data(&data, &key)?;
@@ -494,8 +494,8 @@ pub fn state_list() -> Result<Value, String> {
 pub fn state_show(path: &str) -> Result<Value, String> {
     let encrypted = path.ends_with(".enc");
     let json_str = if encrypted {
-        let key = std::env::var("AGENT_BROWSER_ENCRYPTION_KEY").map_err(|_| {
-            "Encrypted state file requires AGENT_BROWSER_ENCRYPTION_KEY".to_string()
+        let key = std::env::var("VEIL_ENCRYPTION_KEY").map_err(|_| {
+            "Encrypted state file requires VEIL_ENCRYPTION_KEY".to_string()
         })?;
         let data = fs::read(path).map_err(|e| format!("Failed to read state file: {}", e))?;
         let decrypted = decrypt_data(&data, &key)?;
@@ -716,9 +716,9 @@ pub fn dispatch_state_command(cmd: &Value) -> Option<Result<Value, String>> {
 
 pub fn get_sessions_dir() -> PathBuf {
     if let Some(home) = dirs::home_dir() {
-        home.join(".agent-browser").join("sessions")
+        home.join(".veil").join("sessions")
     } else {
-        std::env::temp_dir().join("agent-browser").join("sessions")
+        std::env::temp_dir().join("veil").join("sessions")
     }
 }
 

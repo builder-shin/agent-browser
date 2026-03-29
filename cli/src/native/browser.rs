@@ -469,7 +469,7 @@ impl BrowserManager {
             .await;
         if self.stealth {
             if let Err(e) = crate::native::stealth::inject_stealth_scripts(&self.client, session_id).await {
-                eprintln!("[agent-browser] Stealth injection failed: {}. Continuing without stealth.", e);
+                eprintln!("[veil] Stealth injection failed: {}. Continuing without stealth.", e);
             }
         }
         Ok(())

@@ -264,8 +264,8 @@ fn run_dashboard_start(port: u16, json_mode: bool) {
     };
 
     let mut cmd = std::process::Command::new(&exe_path);
-    cmd.env("AGENT_BROWSER_DASHBOARD", "1")
-        .env("AGENT_BROWSER_DASHBOARD_PORT", port.to_string());
+    cmd.env("VEIL_DASHBOARD", "1")
+        .env("VEIL_DASHBOARD_PORT", port.to_string());
 
     #[cfg(unix)]
     {
@@ -485,23 +485,23 @@ fn main() {
         env::set_var("MSYS2_ARG_CONV_EXCL", "*");
     }
 
-    // Native daemon mode: when AGENT_BROWSER_DAEMON is set, run as the daemon process
-    if env::var("AGENT_BROWSER_DAEMON").is_ok() {
+    // Native daemon mode: when VEIL_DAEMON is set, run as the daemon process
+    if env::var("VEIL_DAEMON").is_ok() {
         // Ignore SIGPIPE so the daemon isn't killed when the parent drops
         // the piped stderr handle after confirming the daemon is ready.
         #[cfg(unix)]
         unsafe {
             libc::signal(libc::SIGPIPE, libc::SIG_IGN);
         }
-        let session = env::var("AGENT_BROWSER_SESSION").unwrap_or_else(|_| "default".to_string());
+        let session = env::var("VEIL_SESSION").unwrap_or_else(|_| "default".to_string());
         let rt = tokio::runtime::Runtime::new().expect("Failed to create tokio runtime");
         rt.block_on(native::daemon::run_daemon(&session));
         return;
     }
 
     // Standalone dashboard server mode
-    if env::var("AGENT_BROWSER_DASHBOARD").is_ok() {
-        let port: u16 = env::var("AGENT_BROWSER_DASHBOARD_PORT")
+    if env::var("VEIL_DASHBOARD").is_ok() {
+        let port: u16 = env::var("VEIL_DASHBOARD_PORT")
             .ok()
             .and_then(|s| s.parse().ok())
             .unwrap_or(4848);
@@ -787,7 +787,7 @@ fn main() {
 
         if !ignored_flags.is_empty() && !flags.json {
             eprintln!(
-                "{} {} ignored: daemon already running. Use 'agent-browser close' first to restart with new options.",
+                "{} {} ignored: daemon already running. Use 'veil close' first to restart with new options.",
                 color::warning_indicator(),
                 ignored_flags.join(", ")
             );
@@ -1180,7 +1180,7 @@ fn main() {
                             .and_then(|v| v.as_str())
                             .unwrap_or("");
 
-                        eprintln!("[agent-browser] Action requires confirmation:");
+                        eprintln!("[veil] Action requires confirmation:");
                         eprintln!("  {}: {}", category, desc);
                         eprint!("  Allow? [y/N]: ");
 
